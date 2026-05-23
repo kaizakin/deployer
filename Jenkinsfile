@@ -6,10 +6,14 @@ pipeline {
         }
     }
 
+    triggers {
+        pollSCM('H/5 * * * *')
+    }
+
     environment {
-        REGISTRY_TARGET  = 'localhost:5000'
+        DOCKERHUB_USER   = 'voidmoon' 
         APPLICATION_NAME = 'go-service'
-        APPLICATION_TAG  = "${APPLICATION_NAME}-${env.BUILD_NUMBER}"
+        APPLICATION_TAG  = "${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -34,15 +38,21 @@ pipeline {
             }
             steps {
                 echo 'Assembling immutable container layers using zero-privilege space...'
-                sh """
-                    /kaniko/executor \
-                        --context=dir://\${WORKSPACE} \
-                        --dockerfile=\${WORKSPACE}/Dockerfile \
-                        --destination=\${REGISTRY_TARGET}/\${APPLICATION_TAG} \
-                        --destination=\${REGISTRY_TARGET}/\${APPLICATION_NAME}:latest \
-                        --insecure \
-                        --skip-tls-verify
-                """
+                // IMPORTANT: Create a 'Username with password' credential in Jenkins named 'dockerhub-credentials'
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                    sh """
+                        # Create Kaniko Docker config for Docker Hub authentication
+                        mkdir -p /kaniko/.docker
+                        AUTH=\$(echo -n "\${DOCKER_USERNAME}:\${DOCKER_PASSWORD}" | base64 | tr -d '\\n')
+                        echo '{"auths": {"https://index.docker.io/v1/": {"auth": "'\$AUTH'"}}}' > /kaniko/.docker/config.json
+
+                        /kaniko/executor \
+                            --context=dir://\${WORKSPACE} \
+                            --dockerfile=\${WORKSPACE}/Dockerfile \
+                            --destination=\${DOCKERHUB_USER}/\${APPLICATION_NAME}:\${APPLICATION_TAG} \
+                            --destination=\${DOCKERHUB_USER}/\${APPLICATION_NAME}:latest
+                    """
+                }
             }
         }
 
@@ -51,15 +61,15 @@ pipeline {
             steps {
                 echo 'Orchestrating container lifecycle transition gates...'
                 sh """
-                    # Fetch the newly validated layer image from the local registry
-                    docker pull \${REGISTRY_TARGET}/\${APPLICATION_TAG}
+                    # Fetch the newly validated layer image from Docker Hub
+                    docker pull \${DOCKERHUB_USER}/\${APPLICATION_NAME}:\${APPLICATION_TAG}
 
                     # Launch a secondary instance container under a distinct active target ID reference
                     docker run -d \
                         --name \${APPLICATION_NAME}-green \
                         --network devops-secure-mesh \
                         -e APP_PORT=8081 \
-                        \${REGISTRY_TARGET}/\${APPLICATION_TAG}
+                        \${DOCKERHUB_USER}/\${APPLICATION_NAME}:\${APPLICATION_TAG}
 
                     # Warmup check: Confirm the green instance is healthy before cutting over
                     sleep 5

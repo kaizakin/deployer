@@ -1,0 +1,10 @@
+docker run -d \
+  --restart=on-failure \
+  --memory="4g" \
+  -e JAVA_OPTS="-Xms1g -Xmx2g -XX:+UseG1GC" \
+  -p 8080:8080 \
+  -p 50000:50000 \
+  -v jenkins_home:/var/jenkins_home \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  --user root \
+  jenkins/jenkins:lts

@@ -1,6 +1,3 @@
-# =====================================================================
-# STAGE 1: SECURE COMPILATION LAYER
-# =====================================================================
 FROM golang:1.26-alpine AS compiler
 
 WORKDIR /workspace
@@ -14,9 +11,6 @@ COPY . .
 # Compile optimized static binary with debugging overhead completely stripped
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /artifacts/secure-api main.go
 
-# =====================================================================
-# STAGE 2: MINIMAL RUNTIME TARGET (NON-ROOT ENVIRONMENT)
-# =====================================================================
 FROM alpine:3.19
 
 RUN apk update && apk add --no-cache curl \
