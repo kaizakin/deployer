@@ -1,10 +1,5 @@
 pipeline {
-    agent {
-        docker {
-            image 'golang:1.26-alpine'
-            args '--network=devops-secure-mesh'
-        }
-    }
+    agent none
 
     triggers {
         pollSCM('H/5 * * * *')
