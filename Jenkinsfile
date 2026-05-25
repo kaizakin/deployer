@@ -46,7 +46,7 @@ pipeline {
                     sh """
                         mkdir -p /kaniko/.docker
                         AUTH=\$(echo -n "\${DOCKER_USERNAME}:\${DOCKER_PASSWORD}" | base64 | tr -d '\\n')
-                        echo "{\\"auths\\": {\\"https://index.docker.io/v1/\\": {\\"auth\\": \\"\$AUTH\\" Corporate}}}" > /kaniko/.docker/config.json
+                        echo "{\\"auths\\": {\\"https://index.docker.io/v1/\\": {\\"auth\\": \\"\$AUTH\\"}}}" > /kaniko/.docker/config.json
 
                         /kaniko/executor \
                             --context=dir://\${WORKSPACE} \
