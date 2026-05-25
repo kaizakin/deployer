@@ -1,5 +1,6 @@
 pipeline {
-    agent any
+    // Set agent none globally. We will enforce strict context inside each stage.
+    agent none 
 
     triggers {
         pollSCM('H/5 * * * *')
@@ -13,6 +14,13 @@ pipeline {
 
     stages {
         stage('Automated Source Verification') {
+            // Force Jenkins to allocate a node AND run this specific stage inside the container
+            agent {
+                docker {
+                    image 'golang:1.26-alpine'
+                    args '--network=devops-secure-mesh'
+                }
+            }
             steps {
                 echo 'Executing static syntax verification and testing sweeps...'
                 sh '''
@@ -25,6 +33,7 @@ pipeline {
         }
 
         stage('Rootless Containerization (Kaniko Sandbox)') {
+            // Force Jenkins to drop the previous container and spin up the Kaniko container
             agent {
                 docker {
                     image 'gcr.io/kaniko-project/executor:debug'
@@ -33,13 +42,11 @@ pipeline {
             }
             steps {
                 echo 'Assembling immutable container layers using zero-privilege space...'
-                // IMPORTANT: Create a 'Username with password' credential in Jenkins named 'dockerhub-credentials'
                 withCredentials([usernamePassword(credentialsId: 'dockerhub-credentials', passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
                     sh """
-                        # Create Kaniko Docker config for Docker Hub authentication
                         mkdir -p /kaniko/.docker
                         AUTH=\$(echo -n "\${DOCKER_USERNAME}:\${DOCKER_PASSWORD}" | base64 | tr -d '\\n')
-                        echo '{"auths": {"https://index.docker.io/v1/": {"auth": "'\$AUTH'"}}}' > /kaniko/.docker/config.json
+                        echo "{\\"auths\\": {\\"https://index.docker.io/v1/\\": {\\"auth\\": \\"\$AUTH\\" Corporate}}}" > /kaniko/.docker/config.json
 
                         /kaniko/executor \
                             --context=dir://\${WORKSPACE} \
@@ -52,7 +59,8 @@ pipeline {
         }
 
         stage('Zero-Downtime Blue-Green Deployment') {
-            agent any
+            // Drop container agents entirely. Run this directly on the base host node.
+            agent any 
             steps {
                 echo 'Orchestrating container lifecycle transition gates...'
                 sh """
